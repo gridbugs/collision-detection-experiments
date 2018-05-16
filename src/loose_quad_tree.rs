@@ -50,6 +50,11 @@ impl<T> LooseQuadTree<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.seq += 1;
+        self.nodes[0].reuse(self.seq);
+    }
+
     pub fn insert(&mut self, aabb: Aabb, t: T) {
         let mut centre = aabb.centre();
         let mut index = 0;
@@ -198,17 +203,8 @@ mod tests {
         assert_eq!(collisions, vec![0, 2, 3]);
     }
 
-    #[test]
-    fn compare_to_naive() {
-        let mut rng = StdRng::from_seed(&[0]);
-
-        let size = vec2(100., 100.);
-        let num = 1000;
-
-        let mut q = LooseQuadTree::new(size);
-        let mut n = NaiveCollisionDetection::new(size);
-
-        let entities = (0..num)
+    fn random_entities<R: Rng>(num: u16, rng: &mut R) -> Vec<(u16, Aabb)> {
+        (0..num)
             .map(|id| {
                 let top_left_coord =
                     vec2((rng.next_u32() % 90) as f32, (rng.next_u32() % 90) as f32);
@@ -217,13 +213,14 @@ mod tests {
                 let aabb = Aabb::new(top_left_coord, size);
                 (id, aabb)
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
 
-        for (id, aabb) in entities.iter() {
-            q.insert(*aabb, *id);
-            n.insert(*aabb, *id);
-        }
-
+    fn compare_to_naive_impl(
+        entities: &[(u16, Aabb)],
+        q: &LooseQuadTree<u16>,
+        n: &NaiveCollisionDetection<u16>,
+    ) {
         for (_id, aabb) in entities.iter() {
             let mut qc = Vec::new();
             let mut nc = Vec::new();
@@ -236,5 +233,41 @@ mod tests {
 
             assert_eq!(qc, nc);
         }
+    }
+
+    #[test]
+    fn compare_to_naive() {
+        let mut rng = StdRng::from_seed(&[0]);
+        let size = vec2(100., 100.);
+        let mut q = LooseQuadTree::new(size);
+        let mut n = NaiveCollisionDetection::new(size);
+        let entities = random_entities(1000, &mut rng);
+        for (id, aabb) in entities.iter() {
+            q.insert(*aabb, *id);
+            n.insert(*aabb, *id);
+        }
+        compare_to_naive_impl(&entities, &q, &n);
+    }
+
+    #[test]
+    fn clear_and_reuse() {
+        let mut rng = StdRng::from_seed(&[0]);
+        let size = vec2(100., 100.);
+        let mut q = LooseQuadTree::new(size);
+        let mut n = NaiveCollisionDetection::new(size);
+        let entities = random_entities(1000, &mut rng);
+        for (id, aabb) in entities.iter() {
+            q.insert(*aabb, *id);
+            n.insert(*aabb, *id);
+        }
+        compare_to_naive_impl(&entities, &q, &n);
+        q.clear();
+        n.clear();
+        let entities = random_entities(1000, &mut rng);
+        for (id, aabb) in entities.iter() {
+            q.insert(*aabb, *id);
+            n.insert(*aabb, *id);
+        }
+        compare_to_naive_impl(&entities, &q, &n);
     }
 }

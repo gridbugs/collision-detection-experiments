@@ -19,4 +19,7 @@ impl<T> NaiveCollisionDetection<T> {
             }
         }
     }
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
 }

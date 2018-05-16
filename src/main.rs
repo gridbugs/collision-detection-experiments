@@ -14,41 +14,47 @@ fn main() {}
 
 #[cfg(test)]
 mod bench {
-    use rand::{Rng, SeedableRng, StdRng};
-    use test::{self, Bencher};
-
     use aabb::*;
     use cgmath::{vec2, Vector2};
     use loose_quad_tree::*;
     use naive::*;
+    use test::{self, Bencher};
 
     macro_rules! collision_detection_bench {
-        ($name:ident, $initial:expr, $size:expr) => {
-            #[bench]
-            fn $name(b: &mut Bencher) {
-                let mut rng = StdRng::from_seed(&[0]);
+        ($name:ident, $typ:ident, $size:expr) => {
+            mod $name {
+                use super::*;
+                use rand::{Rng, SeedableRng, StdRng};
 
-                let entity_size = vec2(5., 5.);
-                let world_size = vec2(1000.0, 1000.0);
-                let coord_max: Vector2<u32> = (world_size - entity_size).cast().unwrap();
-                let mut collision_detection = $initial(world_size);
+                fn init() -> (Vec<(u32, Aabb)>, $typ<u32>) {
+                    let mut rng = StdRng::from_seed(&[0]);
 
-                let entities = (0..$size)
-                    .map(|id| {
-                        let top_left_coord = vec2(
-                            (rng.next_u32() % coord_max.x) as f32,
-                            (rng.next_u32() % coord_max.y) as f32,
-                        );
-                        let aabb = Aabb::new(top_left_coord, entity_size);
-                        (id, aabb)
-                    })
-                    .collect::<Vec<_>>();
+                    let entity_size = vec2(5., 5.);
+                    let world_size = vec2(1000.0, 1000.0);
+                    let coord_max: Vector2<u32> = (world_size - entity_size).cast().unwrap();
+                    let collision_detection = $typ::new(world_size);
 
-                for (id, aabb) in entities.iter() {
-                    collision_detection.insert(*aabb, *id);
+                    let entities = (0..$size)
+                        .map(|id| {
+                            let top_left_coord = vec2(
+                                (rng.next_u32() % coord_max.x) as f32,
+                                (rng.next_u32() % coord_max.y) as f32,
+                            );
+                            let aabb = Aabb::new(top_left_coord, entity_size);
+                            (id, aabb)
+                        })
+                        .collect::<Vec<_>>();
+
+                    (entities, collision_detection)
                 }
 
-                b.iter(|| {
+                fn insert_all(entities: &[(u32, Aabb)], collision_detection: &mut $typ<u32>) {
+                    for (id, aabb) in entities.iter() {
+                        collision_detection.insert(*aabb, *id);
+                    }
+                }
+
+                fn compare_all(entities: &[(u32, Aabb)], collision_detection: &$typ<u32>) {
                     for &(id, aabb) in entities.iter() {
                         collision_detection.for_each_intersection(
                             &aabb,
@@ -59,25 +65,54 @@ mod bench {
                             },
                         );
                     }
-                });
+                }
+
+                #[bench]
+                fn compare(b: &mut Bencher) {
+                    let (entities, mut collision_detection) = init();
+                    insert_all(&entities, &mut collision_detection);
+                    b.iter(|| {
+                        compare_all(&entities, &collision_detection);
+                    });
+                }
+
+                #[bench]
+                fn insert(b: &mut Bencher) {
+                    let (entities, mut collision_detection) = init();
+                    b.iter(|| {
+                        insert_all(&entities, &mut collision_detection);
+                        collision_detection.clear();
+                    });
+                }
+
+                #[bench]
+                fn insert_and_compare(b: &mut Bencher) {
+                    let (entities, mut collision_detection) = init();
+                    b.iter(|| {
+                        insert_all(&entities, &mut collision_detection);
+                        compare_all(&entities, &collision_detection);
+                        collision_detection.clear();
+                    });
+                }
+
             }
         };
     }
 
-    collision_detection_bench!(naive_32, NaiveCollisionDetection::new, 32);
-    collision_detection_bench!(naive_64, NaiveCollisionDetection::new, 64);
-    collision_detection_bench!(naive_128, NaiveCollisionDetection::new, 128);
-    collision_detection_bench!(naive_256, NaiveCollisionDetection::new, 256);
-    collision_detection_bench!(naive_512, NaiveCollisionDetection::new, 512);
-    collision_detection_bench!(naive_1024, NaiveCollisionDetection::new, 1024);
-    collision_detection_bench!(loose_quad_32, LooseQuadTree::new, 32);
-    collision_detection_bench!(loose_quad_64, LooseQuadTree::new, 64);
-    collision_detection_bench!(loose_quad_128, LooseQuadTree::new, 128);
-    collision_detection_bench!(loose_quad_256, LooseQuadTree::new, 256);
-    collision_detection_bench!(loose_quad_512, LooseQuadTree::new, 512);
-    collision_detection_bench!(loose_quad_1024, LooseQuadTree::new, 1024);
-    collision_detection_bench!(loose_quad_2048, LooseQuadTree::new, 2048);
-    collision_detection_bench!(loose_quad_4096, LooseQuadTree::new, 4096);
-    collision_detection_bench!(loose_quad_8192, LooseQuadTree::new, 8192);
+    collision_detection_bench!(naive_32, NaiveCollisionDetection, 32);
+    collision_detection_bench!(naive_64, NaiveCollisionDetection, 64);
+    collision_detection_bench!(naive_128, NaiveCollisionDetection, 128);
+    collision_detection_bench!(naive_256, NaiveCollisionDetection, 256);
+    collision_detection_bench!(naive_512, NaiveCollisionDetection, 512);
+    collision_detection_bench!(naive_1024, NaiveCollisionDetection, 1024);
+    collision_detection_bench!(loose_quad_32, LooseQuadTree, 32);
+    collision_detection_bench!(loose_quad_64, LooseQuadTree, 64);
+    collision_detection_bench!(loose_quad_128, LooseQuadTree, 128);
+    collision_detection_bench!(loose_quad_256, LooseQuadTree, 256);
+    collision_detection_bench!(loose_quad_512, LooseQuadTree, 512);
+    collision_detection_bench!(loose_quad_1024, LooseQuadTree, 1024);
+    collision_detection_bench!(loose_quad_2048, LooseQuadTree, 2048);
+    collision_detection_bench!(loose_quad_4096, LooseQuadTree, 4096);
+    collision_detection_bench!(loose_quad_8192, LooseQuadTree, 8192);
 
 }
